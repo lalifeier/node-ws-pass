@@ -29,7 +29,7 @@ RUN mkdir bin && \
     curl -sLo $BIN_DIR/nginx https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && \
     chmod +x $BIN_DIR/nginx
 
-COPY src package.json package-lock.json ./
+COPY app.js package.json package-lock.json ./
 
 RUN npm install
 
