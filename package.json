@@ -1,0 +1,33 @@
+{
+  "name": "node-ws-pass",
+  "version": "0.1.0",
+  "description": "A simple Node app built on fastify, instantly up and running.",
+  "main": "server.js",
+  "scripts": {
+    "start": "nodemon app.js",
+    "start:prod": "cross-env NODE_ENV=production node dist/index",
+    "prepare": "rimraf ./dist/ && ncc build app.js -o ./dist/ --minify --no-cache --no-source-map-register",
+    "build": "npm run prepare"
+  },
+  "dependencies": {
+    "@fastify/http-proxy": "^9.3.0",
+    "@fastify/websocket": "^8.3.1",
+    "axios": "^1.6.5",
+    "compressing": "^1.10.0",
+    "fastify": "^4.25.2",
+    "fs-extra": "^11.2.0",
+    "node-cron": "^3.0.3",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.1",
+    "cross-env": "^7.0.3",
+    "nodemon": "^3.0.3",
+    "rimraf": "^5.0.5",
+    "vercel": "^33.5.0"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT"
+}
