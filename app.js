@@ -339,30 +339,29 @@ async function main () {
   }
 }
 
-main();
-
-// 监听 SIGINT 信号（Ctrl+C）和进程退出事件
-process.on("SIGINT", async () => {
-  console.log(
-    "Received SIGINT signal. Stopping Nezha agent and Cloudflared...",
-  );
-  try {
-    await Promise.all([stopNezhaAgent(), stopCloudflared()]);
-    console.log("Nezha agent and Cloudflared stopped.");
-  } catch (error) {
-    console.error(`Error stopping Nezha agent and Cloudflared: ${error}`);
-  }
-  console.log("Exiting Node.js process.");
-  process.exit(0); // 退出 Node.js 进程
-});
-
-// 监听进程退出事件
-process.on("exit", () => {
-  console.log("Node.js process is exiting.");
-});
-
-
 function init () {
+  main();
+
+  // 监听 SIGINT 信号（Ctrl+C）和进程退出事件
+  process.on("SIGINT", async () => {
+    console.log(
+      "Received SIGINT signal. Stopping Nezha agent and Cloudflared...",
+    );
+    try {
+      await Promise.all([stopNezhaAgent(), stopCloudflared()]);
+      console.log("Nezha agent and Cloudflared stopped.");
+    } catch (error) {
+      console.error(`Error stopping Nezha agent and Cloudflared: ${error}`);
+    }
+    console.log("Exiting Node.js process.");
+    process.exit(0); // 退出 Node.js 进程
+  });
+  
+  // 监听进程退出事件
+  process.on("exit", () => {
+    console.log("Node.js process is exiting.");
+  });
+
   const fastify = require("fastify")({ logger: true });
 
   fastify.register(require("@fastify/websocket"));
