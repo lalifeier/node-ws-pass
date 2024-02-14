@@ -6,8 +6,8 @@
   "scripts": {
     "start": "nodemon app.js",
     "start:prod": "cross-env NODE_ENV=production node dist/index",
-    "prepare": "rimraf ./dist/ && ncc build app.js -o ./dist/ --minify --no-cache --no-source-map-register",
-    "build": "npm run prepare"
+    "prepare": "",
+    "build": "rimraf ./dist/ && ncc build app.js -o ./dist/ --minify --no-cache --no-source-map-register"
   },
   "dependencies": {
     "@fastify/http-proxy": "^9.3.0",

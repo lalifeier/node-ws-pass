@@ -1,14 +1,7 @@
-FROM node:lts-alpine
-
-LABEL maintainer="lalifeier <lalifeier@gmail.com>"
-
-ARG NODE_UID=10001
+FROM node:lts-alpine as builder
 
 RUN apk --no-cache add curl unzip && \
     rm -rf /var/cache/apk/*
-
-RUN apk --no-cache add shadow && \
-    usermod -u $NODE_UID node
 
 WORKDIR /app
 
@@ -29,10 +22,26 @@ RUN mkdir bin && \
     curl -sLo $BIN_DIR/nginx https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && \
     chmod +x $BIN_DIR/nginx
 
-COPY app.js package.json package-lock.json ./
-
+COPY package*.json ./
 RUN npm install
 
-ENTRYPOINT ["npm", "run", "start"]
+COPY app.js ./
+RUN npm run build
+
+FROM node:lts-alpine
+LABEL maintainer="lalifeier <lalifeier@gmail.com>"
+
+WORKDIR /app
+
+ARG NODE_UID=10001
+
+RUN apk --no-cache add shadow && \
+    usermod -u $NODE_UID node
+
+COPY --from=builder /app/dist/* /app
+COPY --from=builder /app/bin /app/bin
 
 USER 10001
+
+ENTRYPOINT ["node", "/app/index"]
+
