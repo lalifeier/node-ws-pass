@@ -530,7 +530,7 @@ function init () {
 if (require.main === module) {
   const app = init();
 
-  app.listen({ port, host: "0.0.0.0" }, (err, address) => {
+  app.listen({ port }, (err, address) => {
     if (err) {
       app.log.error(err);
       process.exit(1);
