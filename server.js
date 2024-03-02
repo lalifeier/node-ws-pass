@@ -27,22 +27,14 @@ const LOG_REDIRECT_OPTION = ENABLE_LOG ? '' : '>/dev/null 2>&1 &';
 const NEZHA_AGENT = 'mysql'
 const CLOUDFLARE = 'nginx'
 
-const urls = ['https://www.google.com', 'https://www.baidu.com'];
-
 if (process.env.NODE_ENV === 'production' || !ENABLE_LOG) {
   console = console || {};
   console.log = function () { };
 }
 
-function uuidv4 () {
-  return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (s) => {
-    const c = Number.parseInt(s, 10);
-    return (
-      c ^
-      (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
-    ).toString(16);
-  });
-}
+const uuidv4 = () => ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c =>
+  (c^Math.random()*16>>c/4).toString(16)
+);
 
 // 获取系统信息
 const OS = process.platform;
@@ -322,18 +314,6 @@ async function main () {
     //   },
     //   3 * 60 * 1000,
     // );
-
-    if (process.env.ENABLE_CRON) {
-      cron.schedule('*/2 * * * *', async () => {
-        try {
-          const url = urls[Math.floor(Math.random() * urls.length)];
-          const response = await axios.get(url);
-          console.log('Visited Google! Status:', response.status);
-        } catch (error) {
-          console.error('Error visiting Google:', error.message);
-        }
-      });
-    }
   } catch (error) {
     console.error(`An error occurred in the main function: ${error}`);
   }
@@ -356,7 +336,7 @@ function init () {
     console.log("Exiting Node.js process.");
     process.exit(0); // 退出 Node.js 进程
   });
-  
+
   // 监听进程退出事件
   process.on("exit", () => {
     console.log("Node.js process is exiting.");
