@@ -484,6 +484,11 @@ function init () {
       "singapore.com",
       "japan.com",
       "icook.tw",
+      "www.csgo.com",
+      "cdnhk.huabuxiang.vip",
+      "ali.055500.xyz",
+      "cdn.shanggan.pp.ua",
+      "hk.100366.xyz
     ];
 
     // const metaInfo = execSync(
