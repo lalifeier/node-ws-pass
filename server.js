@@ -488,7 +488,7 @@ function init () {
       "cdnhk.huabuxiang.vip",
       "ali.055500.xyz",
       "cdn.shanggan.pp.ua",
-      "hk.100366.xyz
+      "hk.100366.xyz"
     ];
 
     // const metaInfo = execSync(
