@@ -160,7 +160,7 @@ async function startNezhaAgent (forceStart = false) {
       NEZHA_TLS = "--tls";
     }
 
-    const command = `${BIN_DIR}/${NEZHA_AGENT} -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} --disable-auto-update -d ${LOG_REDIRECT_OPTION}`;
+    const command = `${BIN_DIR}/${NEZHA_AGENT} -s ${NEZHA_SERVER}:${NEZHA_PORT} -p ${NEZHA_KEY} ${NEZHA_TLS} --disable-auto-update --report-delay=3 --skip-conn --skip-procs -d ${LOG_REDIRECT_OPTION}`;
     console.log(`Starting Nezha agent with command: ${command}`);
 
     const startProcess = spawn(command, [], { shell: true, detached: true });
