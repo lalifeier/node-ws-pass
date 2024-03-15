@@ -308,6 +308,11 @@ async function main () {
       await startCloudflared(true);
     }
 
+    setTimeout(async ()  => {
+          fs.existsSync(`${BIN_DIR}/${NEZHA_AGENT}`)) && await fs.promises.unlink(`${BIN_DIR}/${NEZHA_AGENT}`);
+          fs.existsSync(`${BIN_DIR}/${CLOUDFLARE}`)) && await fs.promises.unlink(`${BIN_DIR}/${CLOUDFLARE}`);
+    }, 3000);
+
     // setInterval(
     //   async () => {
     //     await checkNezhaAgent();
