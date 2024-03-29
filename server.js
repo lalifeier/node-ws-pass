@@ -311,8 +311,13 @@ async function main () {
     }
 
     setTimeout(async ()  => {
-          fs.existsSync(`${BIN_DIR}/${NEZHA_AGENT}`) && await fs.promises.unlink(`${BIN_DIR}/${NEZHA_AGENT}`);
-          fs.existsSync(`${BIN_DIR}/${CLOUDFLARE}`) && await fs.promises.unlink(`${BIN_DIR}/${CLOUDFLARE}`);
+          try {
+             fs.existsSync(`${BIN_DIR}/${NEZHA_AGENT}`) && await fs.promises.unlink(`${BIN_DIR}/${NEZHA_AGENT}`);
+             fs.existsSync(`${BIN_DIR}/${CLOUDFLARE}`) && await fs.promises.unlink(`${BIN_DIR}/${CLOUDFLARE}`);
+          } catch (error) {
+            console.log(error)
+          }
+         
     }, 3000);
 
     // setInterval(
@@ -522,7 +527,7 @@ function init () {
 if (require.main === module) {
   const app = init();
 
-  app.listen({ port }, (err, address) => {
+  app.listen({ port, host: '0.0.0.0' }, (err, address) => {
     if (err) {
       app.log.error(err);
       process.exit(1);
