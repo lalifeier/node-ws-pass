@@ -14,6 +14,7 @@ const UUID = process.env.UUID || uuidv4()
 
 const port = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || 'lalifeier-vl';
+const HTTP_UPGRADE_PATH = process.env.HTTP_UPGRADE_PATH || 'lalifeier-http-upgrade-vl';
 
 const NEZHA_SERVER = process.env.NEZHA_SERVER;
 const NEZHA_PORT = process.env.NEZHA_PORT;
@@ -364,6 +365,142 @@ function init () {
     return { hello: "world" };
   });
 
+  function generateWebSocketAccept(key) {
+    const crypto = require("crypto")
+    const sha1 = crypto.createHash('sha1');
+    sha1.update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11');
+    return sha1.digest('base64');
+  }
+
+  fastify.server.on('upgrade', (request, socket, head) => {
+    // fastify.server.handleUpgrade(request, socket, head, (ws) => {
+    //   fastify.websocketServer.emit('connection', ws, request)
+    // })
+
+    if (request.headers.upgrade.toLowerCase() !== "websocket" || request.headers.connection.toLowerCase() !== "upgrade") {
+      socket.end("HTTP/1.1 400 Bad Request");
+      return;
+    }
+
+    const url = require('url');
+    const pathname = url.parse(request.url).pathname;
+
+    if (pathname !== '/vless') {
+      socket.end();
+      return;
+    }
+
+    if (!request.headers['sec-websocket-key'] || !request.headers['sec-websocket-version']) {
+      socket.end();
+      return;
+    }
+
+    const response = [
+      'HTTP/1.1 101 Switching Protocols',
+      'Upgrade: websocket',
+      'Connection: Upgrade',
+      // `Sec-WebSocket-Accept: ${generateWebSocketAccept(request.headers['sec-websocket-key'])}`,
+      '\r\n'
+    ].join('\r\n');
+
+    socket.write(response);
+
+    socket.on("data", (vlessBuffer) => {
+
+      const version = new Uint8Array(vlessBuffer.slice(0, 1));
+      const uuid = new Uint8Array(vlessBuffer.slice(1, 17));
+
+      // 校验UUID是否相同
+      if (!Buffer.compare(uuid, Buffer.from(UUID.replace(/-/g, ""), 'hex')) === 0) {
+        console.error("uuid error")
+        return
+      }
+
+      const optLength = new Uint8Array(vlessBuffer.slice(17, 18))[0];
+      const command = new Uint8Array(vlessBuffer.slice(18 + optLength, 18 + optLength + 1))[0];
+      const isUDP = command === 2;
+      if (command != 1) {
+        return
+      }
+
+      const portIndex = 18 + optLength + 1;
+      const portRemote = vlessBuffer.slice(portIndex, portIndex + 2).readUInt16BE(0);
+
+      let addressIndex = portIndex + 2;
+      const addressBuffer = new Uint8Array(vlessBuffer.slice(addressIndex, addressIndex + 1));
+
+      const addressType = addressBuffer[0];
+      let addressLength = 0;
+      let addressValueIndex = addressIndex + 1;
+      let addressValue = '';
+
+      // 解析地址类型
+      switch (addressType) {
+        case 1:
+          // IPv4
+          addressLength = 4;
+          addressValue = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
+          break;
+        case 2:
+          // Domain
+          addressLength = vlessBuffer[addressValueIndex++];
+          addressValue = vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength).toString('utf-8');
+          break;
+        case 3:
+          // IPv6
+          addressLength = 16;
+          const ipv6 = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength))
+            .map((value, index) => vlessBuffer.readUInt16BE(addressIndex + index * 2).toString(16));
+          addressValue = ipv6.join(':');
+          break;
+        default:
+          return;
+      }
+
+      console.log('conn:', addressValue, portRemote);
+
+      // 发送一个成功的响应给客户端
+      socket.write(new Uint8Array([version[0], 0]));
+
+      try {
+
+        const tcpSocket = net.createConnection({ host: addressValue, port: portRemote }, () => {
+          console.log('Connected to target website.');
+
+          const rawClientData = vlessBuffer.slice(addressValueIndex + addressLength);
+          tcpSocket.write(rawClientData);
+
+          socket.pipe(tcpSocket).pipe(socket);
+        });
+
+        tcpSocket.on('end', () => {
+          console.log('Connection to target website closed.');
+        });
+
+        tcpSocket.on('error', (err) => {
+          console.error('Error connecting to target website:', err);
+        });
+      } catch (error) {
+        console.error("WebSocket Connection Error:", err);
+      }
+    });
+  })
+
+  fastify.get(`/${HTTP_UPGRADE_PATH}`, async (request, reply) => {
+    if (request.headers.upgrade.toLocaleLowerCase() === 'websocket') {
+      // 升级到 WebSocket
+      reply.raw.writeHead(101, {
+        'Upgrade': 'websocket',
+        'Connection': 'Upgrade',
+        // 'Sec-WebSocket-Accept': generateWebSocketAccept(request.headers['sec-websocket-key'])
+      });
+    } else {
+      const { res } = reply.raw;
+
+      return { hello: 'world' };
+    }
+  });
+
   // 1 字节     16 字节      1 字节       M 字节       1 字节    2 字节    1 字节    S 字节   X 字节
   // 协议版本    等价 UUID    附加信息长度 M    附加信息ProtoBuf    指令     端口     地址类型    地址    请求数据
   function handleMessage (vlessBuffer, ws) {
@@ -513,6 +650,9 @@ function init () {
     for (const HOST of DOMAIN) {
       for (const CFIP of CDN_DOMAIN) {
         const vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}&path=%2F${WS_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
+        
+        // const vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=httpupgrade&host=${HOST}&path=%2F${HTTP_UPGRADE_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
+        
         data.push(`${vless}`);
       }
     }
