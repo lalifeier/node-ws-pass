@@ -487,7 +487,7 @@ function init () {
   })
 
   fastify.get(`/${HTTP_UPGRADE_PATH}`, async (request, reply) => {
-    if (request.headers.upgrade.toLocaleLowerCase() === 'websocket') {
+    if (request.headers.upgrade === 'websocket') {
       // 升级到 WebSocket
       reply.raw.writeHead(101, {
         'Upgrade': 'websocket',
