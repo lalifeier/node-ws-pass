@@ -1,0 +1,16 @@
+# Spacefile Docs: https://go.deta.dev/docs/spacefile/v0
+v: 0
+micros:
+  - name: node-sbs-pass
+    src: ./
+    engine: nodejs16
+    primary: true
+    public: true
+    commands:
+      - npm run build
+    include:
+      - bin
+      - dist
+      - node_modules
+    run: node dist/index.js
+    dev: npm run start
