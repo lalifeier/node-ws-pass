@@ -5,9 +5,7 @@ const axios = require("axios");
 const compressing = require("compressing");
 const { createWebSocketStream } = require("ws");
 const net = require("net");
-const http = require('http');
 const url = require("url");
-const { Readable } = require('stream');
 // const UUID = process.env.UUID || "ffffffff-ffff-ffff-ffff-ffffffffffff";
 const UUID = process.env.UUID || uuidv4()
 
@@ -20,6 +18,10 @@ const NEZHA_PORT = process.env.NEZHA_PORT;
 const NEZHA_KEY = process.env.NEZHA_KEY;
 const CLOUDFLARE_TOKEN = process.env.CLOUDFLARE_TOKEN;
 const DOMAIN = process.env.DOMAIN;
+const AUTHORIZATION_TOKEN =  process.env.AUTHORIZATION_TOKEN || 'lalifeier';
+
+const AUTHORIZATION_USER =  process.env.AUTHORIZATION_USER || 'lalifeier';
+const AUTHORIZATION_PASSWORD =  process.env.AUTHORIZATION_PASSWORD || '123456';
 
 const CF_DOMAIN = process.env.CF_DOMAIN || ''
 
@@ -34,7 +36,7 @@ if (process.env.NODE_ENV === 'production' || !ENABLE_LOG) {
   console.log = function () { };
 }
 
-function uuidv4 () {
+function uuidv4() {
   return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
     (c ^ Math.random() * 16 >> c / 4).toString(16)
   );
@@ -47,14 +49,14 @@ const ARCH = process.arch === "x64" ? "amd64" : process.arch;
 const BIN_DIR = path.join(__dirname, "bin");
 
 // 创建目录
-function createDirectory () {
+function createDirectory() {
   if (!fs.existsSync(BIN_DIR)) {
     fs.mkdirSync(BIN_DIR, { recursive: true });
   }
 }
 
 // 下载文件
-async function downloadFile (url, targetPath) {
+async function downloadFile(url, targetPath) {
   const response = await axios({
     method: "GET",
     url: url,
@@ -78,7 +80,7 @@ async function downloadFile (url, targetPath) {
 }
 
 // 安装 Nezha 监控
-async function installNezha () {
+async function installNezha() {
   const toolPath = path.join(BIN_DIR, NEZHA_AGENT);
 
   if (fs.existsSync(toolPath)) {
@@ -124,7 +126,7 @@ async function installNezha () {
   }
 }
 
-async function checkNezhaAgent () {
+async function checkNezhaAgent() {
   if (!NEZHA_SERVER || !NEZHA_PORT || !NEZHA_KEY) {
     console.error(
       "Missing NEZHA_SERVER, NEZHA_PORT, or NEZHA_KEY.Skipping Nezha agent check.",
@@ -146,7 +148,7 @@ async function checkNezhaAgent () {
   }
 }
 
-async function startNezhaAgent (forceStart = false) {
+async function startNezhaAgent(forceStart = false) {
   if (!NEZHA_SERVER || !NEZHA_PORT || !NEZHA_KEY) {
     console.error(
       "Missing NEZHA_SERVER, NEZHA_PORT, or NEZHA_KEY. Skipping Nezha agent start.",
@@ -185,7 +187,7 @@ async function startNezhaAgent (forceStart = false) {
   }
 }
 
-async function stopNezhaAgent (forceStart) {
+async function stopNezhaAgent(forceStart) {
   return new Promise((resolve, reject) => {
     const stopProcess = spawn("pkill", ["-f", NEZHA_AGENT]);
 
@@ -206,7 +208,7 @@ async function stopNezhaAgent (forceStart) {
   });
 }
 
-async function installCloudflared () {
+async function installCloudflared() {
   const toolPath = path.join(BIN_DIR, CLOUDFLARE);
 
   if (!fs.existsSync(toolPath)) {
@@ -221,7 +223,7 @@ async function installCloudflared () {
   }
 }
 
-async function checkCloudflared () {
+async function checkCloudflared() {
   try {
     if (!CLOUDFLARE_TOKEN) {
       console.log("CLOUDFLARE_TOKEN is not set. Skipping Cloudflared check.");
@@ -241,7 +243,7 @@ async function checkCloudflared () {
   }
 }
 
-async function startCloudflared (forceStart = false) {
+async function startCloudflared(forceStart = false) {
   if (!CLOUDFLARE_TOKEN) {
     console.log("CLOUDFLARE_TOKEN is not set. Skipping Cloudflared start.");
     return;
@@ -273,7 +275,7 @@ async function startCloudflared (forceStart = false) {
   }
 }
 
-async function stopCloudflared (forceStart) {
+async function stopCloudflared(forceStart) {
   return new Promise((resolve, reject) => {
     const stopProcess = spawn("pkill", ["-f", CLOUDFLARE]);
 
@@ -294,7 +296,7 @@ async function stopCloudflared (forceStart) {
   });
 }
 
-async function main () {
+async function main() {
   try {
     createDirectory();
 
@@ -333,7 +335,7 @@ async function main () {
   }
 }
 
-function init () {
+function init() {
   main();
 
   // 监听 SIGINT 信号（Ctrl+C）和进程退出事件
@@ -357,7 +359,7 @@ function init () {
   });
 
   const fastify = require("fastify")({
-    logger: true,
+    logger: !!ENABLE_LOG,
     // serverFactory: (handler, opts) => {
     //   const server = http.createServer(handler);
 
@@ -407,11 +409,18 @@ function init () {
 
   fastify.register(require("@fastify/websocket"));
 
+  // fastify.addHook('onRequest', (request, reply, done) => {
+  //   done()
+  // })
+
+  // fastify.addHook('preHandler', (request, reply, done) => {
+  //   done()
+  // })
+
   const server = fastify.server;
 
-  server.on('request', (request, socket, head) => {
-    console.log(request.url)
-  })
+  // server.on('request', (request, socket, head) => {
+  // })
 
   server.on('upgrade', (request, socket, head) => {
     // fastify.server.handleUpgrade(request, socket, head, (ws) => {
@@ -539,6 +548,14 @@ function init () {
     console.log('Received CONNECT request:', request.url);
 
     try {
+      if (request.headers['proxy-authorization'] !== 'Basic ' + Buffer.from(`${AUTHORIZATION_USER}:${AUTHORIZATION_PASSWORD}`).toString('base64')) {
+
+        console.error('Invalid authorization header.');
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.end();
+        return;
+      }
+
       const parts = request.url.split(':');
       const host = parts[0];
       const port = parseInt(parts[1], 10);
@@ -551,7 +568,7 @@ function init () {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
 
         console.log('Piping data between client and target website.');
-        socket.pipe(tcpSocket).pipe(socket);
+        tcpSocket.pipe(socket).pipe(tcpSocket);
       });
 
       tcpSocket.on('end', () => {
@@ -575,85 +592,117 @@ function init () {
     }
   });
 
-  server.on('connection', (socket) => {
-    socket.once('data', (data) => {
-      try {
-        // SOCKS5
-        if (data[0] === 0x05) {
-          // 检查数据是否有效 SOCKS5 请求
-          // if (!data || data[0] !== 0x05) throw new Error('Invalid SOCKS5 request');
+  // server.on('connection', (socket) => {
+  //   socket.on('data', data => {
+  //     console.log(data)
+  //     socket.write(Buffer.from([0x05, 0x00]))
+  //   })
 
-          // 向客户端发送 SOCKS5 握手响应
-          socket.write(Buffer.from([0x05, 0x00]))
 
-          // socket.once('data', (data) => {
-          //   console.log(data)
+  //   // socket.on('data', (data) => {
+  //   //   try {
+  //   //     // SOCKS5
+  //   //     if (data[0] === 0x05) {
+  //   //       // 检查数据是否有效 SOCKS5 请求
+  //   //       // if (!data || data[0] !== 0x05) throw new Error('Invalid SOCKS5 request');
 
-          //   // 检查数据是否有效 SOCKS5 CONNECT 请求
-          //   if (data.length < 7 || data[1] !== 0x01) throw new Error('Invalid SOCKS5 CONNECT request');
+  //   //       // 向客户端发送 SOCKS5 握手响应
+  //   //       socket.write(Buffer.from([0x05, 0x00]))
 
-          //   // 获取目标服务器的地址类型
-          //   const addrType = data[3];
+  //   //       // socket.once('data', (data) => {
+  //   //       //   console.log(data)
 
-          //   // 获取目标服务器的地址和端口
-          //   let remoteAddress;
-          //   let remotePort;
+  //   //       //   // 检查数据是否有效 SOCKS5 CONNECT 请求
+  //   //       //   if (data.length < 7 || data[1] !== 0x01) throw new Error('Invalid SOCKS5 CONNECT request');
 
-          //   // 根据地址类型解析目标服务器的地址
-          //   if (addrType === 3) {  // 域名地址
-          //     const addrLen = data[4];
-          //     remoteAddress = data.slice(5, 5 + addrLen).toString('binary');
-          //   } else if (addrType === 1) {  // IPv4 地址
-          //     remoteAddress = data.slice(4, 8).join('.');
-          //   } else if (addrType === 4) {  // IPv6 地址
-          //     remoteAddress = data.slice(4, 4 + addrLen).join(':');
-          //   } else {
-          //     throw new Error('Invalid address type');
-          //   }
+  //   //       //   // 获取目标服务器的地址类型
+  //   //       //   const addrType = data[3];
 
-          //   // 获取目标服务器的端口
-          //   remotePort = data.readUInt16BE(data.length - 2);
+  //   //       //   // 获取目标服务器的地址和端口
+  //   //       //   let remoteAddress;
+  //   //       //   let remotePort;
 
-          //   // 连接到目标服务器
-          //   const remote = net.connect(remotePort, remoteAddress, () => {
-          //     console.log(`Connected to remote server ${remoteAddress}:${remotePort}`);
+  //   //       //   // 根据地址类型解析目标服务器的地址
+  //   //       //   if (addrType === 3) {  // 域名地址
+  //   //       //     const addrLen = data[4];
+  //   //       //     remoteAddress = data.slice(5, 5 + addrLen).toString('binary');
+  //   //       //   } else if (addrType === 1) {  // IPv4 地址
+  //   //       //     remoteAddress = data.slice(4, 8).join('.');
+  //   //       //   } else if (addrType === 4) {  // IPv6 地址
+  //   //       ////     remoteAddress = data.slice(4, 4 + addrLen).join(':');
+  //   //       //   } else {
+  //   //       //     throw new Error('Invalid address type');
+  //   //       //   }
 
-          //     // 向客户端发送 SOCKS5 CONNECT 响应
-          //     socket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
+  //   //       //   // 获取目标服务器的端口
+  //   //       //   remotePort = data.readUInt16BE(data.length - 2);
 
-          //     // 将客户端和目标服务器连接在一起
-          //     remote.pipe(socket);
-          //     socket.pipe(remote);
-          //   });
+  //   //       //   // 连接到目标服务器
+  //   //       //   const remote = net.connect(remotePort, remoteAddress, () => {
+  //   //       //     console.log(`Connected to remote server ${remoteAddress}:${remotePort}`);
 
-          //   // 处理连接到目标服务器的错误
-          //   remote.on('error', (err) => {
-          //     console.error(`Error connecting to remote server ${remoteAddress}:${remotePort}: ${err.message}`);
-          //     remote.destroy();
-          //     socket.destroy();
-          //   });
+  //   //       //     // 向客户端发送 SOCKS5 CONNECT 响应
+  //   //       //     socket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]));
 
-          //   // 处理 `remote` 套接字的关闭
-          //   remote.on('close', () => {
-          //     console.log(`Connection to remote server ${remoteAddress}:${remotePort} closed`);
-          //     socket.destroy();
-          //   });
-          // });
-        }
+  //   //       //     // 将客户端和目标服务器连接在一起
+  //   //       //     remote.pipe(socket);
+  //   //       //     socket.pipe(remote);
+  //   //       //   });
 
-      } catch (err) {
-        console.error(`Error processing SOCKS request: ${err.message}`);
-        socket.destroy();
-      }
-    });
+  //   //       //   // 处理连接到目标服务器的错误
+  //   //       //   remote.on('error', (err) => {
+  //   //       //     console.error(`Error connecting to remote server ${remoteAddress}:${remotePort}: ${err.message}`);
+  //   //       //     remote.destroy();
+  //   //       //     socket.destroy();
+  //   //       //   });
 
-    // 处理套接字错误
-    socket.on('error', (err) => {
-      console.error(`Error on socket: ${err.message}`);
-    });
-  });
+  //   //       //   // 处理 `remote` 套接字的关闭
+  //   //       //   remote.on('close', () => {
+  //   //       //     console.log(`Connection to remote server ${remoteAddress}:${remotePort} closed`);
+  //   //       //     socket.destroy();
+  //   //       //   });
+  //   //       // });
+  //   //     } else {
 
-  fastify.get("/", async (request, reply) => {
+  //   //     }
+
+  //   //   } catch (err) {
+  //   //     console.error(`Error processing SOCKS request: ${err.message}`);
+  //   //     socket.destroy();
+  //   //   }
+  //   // });
+
+  //   // // 处理套接字错误
+  //   // socket.on('error', (err) => {
+  //   //   console.error(`Error on socket: ${err.message}`);
+  //   // });
+  // });
+
+  // fastify.addHook('onRequest', async (request, reply) => {
+  //   console.log("========================")
+
+  //   if (request.headers['proxy-connection']) {
+  //     console.log('Received HTTP request:', request.method, request.url);
+
+  //     const response = await fetch(request.url, {
+  //       method: request.method,
+  //       headers: request.headers,
+  //     });
+
+  //     console.log('Received HTTP response:', response.status, response.statusText);
+
+  //     return reply.send(response.body);
+
+  //     // response.body.pipe(reply.raw);
+  //   }
+  // });
+
+
+  fastify.all("/", async (request, reply) => {
+    if (!request.headers['proxy-connection'] || request.url === '/') {
+      return { hello: "world" };
+    }
+
     console.log('Received HTTP request:', request.method, request.url);
 
     const response = await fetch(request.url, {
@@ -664,6 +713,7 @@ function init () {
     console.log('Received HTTP response:', response.status, response.statusText);
 
     return reply.send(response.body);
+
   });
 
   fastify.get('/proxy', async (request, reply) => {
@@ -671,21 +721,11 @@ function init () {
     const { socket } = reply.raw;
 
     const { port, hostname } = url.parse(request.url);
-    const targetSocket = net.connect(port, hostname);
+    const targetSocket = net.connect(port, 'hostname');
     socket.pipe(targetSocket).pipe(socket);
   });
 
-  fastify.addHook('onRequest', (request, reply, done) => {
-    console.log(request.method)
-    done()
-  })
-
-  fastify.addHook('preHandler', (request, reply, done) => {
-    console.log(request.method)
-    done()
-  })
-
-  function generateWebSocketAccept (key) {
+  function generateWebSocketAccept(key) {
     const crypto = require("crypto")
     const sha1 = crypto.createHash('sha1');
     sha1.update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11');
@@ -709,7 +749,7 @@ function init () {
 
   // 1 字节     16 字节      1 字节       M 字节       1 字节    2 字节    1 字节    S 字节   X 字节
   // 协议版本    等价 UUID    附加信息长度 M    附加信息ProtoBuf    指令     端口     地址类型    地址    请求数据
-  function handleMessage (vlessBuffer, ws) {
+  function handleMessage(vlessBuffer, ws) {
     const version = new Uint8Array(vlessBuffer.slice(0, 1));
     const uuid = new Uint8Array(vlessBuffer.slice(1, 17));
 
@@ -818,11 +858,16 @@ function init () {
     });
   });
 
-  function getDomainPrefix (hostname) {
+  function getDomainPrefix(hostname) {
     return hostname.split('.')[0];
   }
 
   fastify.get("/sub", async (request, reply) => {
+    if (request.query.token != AUTHORIZATION_TOKEN) {
+      return reply.code(403).send({ message: 'Forbidden' });
+    }
+
+
     const NODE_NAME = require("os").hostname();
 
     let hostname = request.hostname;
@@ -913,7 +958,11 @@ if (require.main === module) {
   //         } else if (addrType === 1) {  // IPv4 地址
   //           remoteAddress = data.slice(4, 8).join('.');
   //         } else if (addrType === 4) {  // IPv6 地址
-  //           remoteAddress = data.slice(4, 4 + addrLen).join(':');
+  //           const ipv6Segments = [];
+  //           for (let i = 0; i < 8; i++) {
+  //             ipv6Segments.push(data.readUInt16BE(4 + i * 2).toString(16));
+  //           }
+  //           remoteAddress = ipv6Segments.join(':');
   //         } else {
   //           throw new Error('Invalid address type');
   //         }
