@@ -705,6 +705,13 @@ function init() {
 
     console.log('Received HTTP request:', request.method, request.url);
 
+    if (request.headers['proxy-authorization'] !== 'Basic ' + Buffer.from(`${AUTHORIZATION_USER}:${AUTHORIZATION_PASSWORD}`).toString('base64')) {
+
+      console.error('Invalid authorization header.');
+      reply.code(401).send('Unauthorized');
+      return;
+    }
+
     const response = await fetch(request.url, {
       method: request.method,
       headers: request.headers,
