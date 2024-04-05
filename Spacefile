@@ -9,7 +9,6 @@ micros:
     commands:
       - npm run build
     include:
-      - bin
       - dist
       - node_modules
     run: node dist/index.js
