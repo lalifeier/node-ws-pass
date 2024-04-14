@@ -5,6 +5,7 @@ const axios = require("axios");
 const compressing = require("compressing");
 const { createWebSocketStream } = require("ws");
 const net = require("net");
+const http = require("http");
 const url = require("url");
 // const UUID = process.env.UUID || "ffffffff-ffff-ffff-ffff-ffffffffffff";
 const UUID = process.env.UUID || uuidv4()
@@ -18,10 +19,10 @@ const NEZHA_PORT = process.env.NEZHA_PORT;
 const NEZHA_KEY = process.env.NEZHA_KEY;
 const CLOUDFLARE_TOKEN = process.env.CLOUDFLARE_TOKEN;
 const DOMAIN = process.env.DOMAIN;
-const AUTHORIZATION_TOKEN =  process.env.AUTHORIZATION_TOKEN || 'lalifeier';
+const AUTHORIZATION_TOKEN = process.env.AUTHORIZATION_TOKEN || 'lalifeier';
 
-const AUTHORIZATION_USER =  process.env.AUTHORIZATION_USER || 'lalifeier';
-const AUTHORIZATION_PASSWORD =  process.env.AUTHORIZATION_PASSWORD || '123456';
+const AUTHORIZATION_USER = process.env.AUTHORIZATION_USER || 'lalifeier';
+const AUTHORIZATION_PASSWORD = process.env.AUTHORIZATION_PASSWORD || '123456';
 
 const CF_DOMAIN = process.env.CF_DOMAIN || ''
 
@@ -434,115 +435,117 @@ function init() {
       return;
     }
 
-    const url = require('url');
-    const pathname = url.parse(request.url).pathname;
-
-    if (pathname !== `/${HTTP_UPGRADE_PATH}`) {
-      console.log('Invalid pathname. Closing connection.');
-      socket.end();
-      return;
-    }
-
     if (!request.headers['sec-websocket-key'] || !request.headers['sec-websocket-version']) {
       console.log('Missing WebSocket headers. Closing connection.');
       socket.end();
       return;
     }
 
-    const response = [
-      'HTTP/1.1 101 Switching Protocols',
-      'Upgrade: websocket',
-      'Connection: Upgrade',
-      // `Sec-WebSocket-Accept: ${generateWebSocketAccept(request.headers['sec-websocket-key'])}`,
-      '\r\n'
-    ].join('\r\n');
+    const url = require('url');
+    const pathname = url.parse(request.url).pathname;
 
-    console.log('Sending WebSocket handshake response.');
-    socket.write(response);
+    if (pathname === `/${HTTP_UPGRADE_PATH}`) {
+      const response = [
+        'HTTP/1.1 101 Switching Protocols',
+        'Upgrade: websocket',
+        'Connection: Upgrade',
+        // `Sec-WebSocket-Accept: ${generateWebSocketAccept(request.headers['sec-websocket-key'])}`,
+        '\r\n'
+      ].join('\r\n');
 
-    socket.on("data", (vlessBuffer) => {
-      console.log('Received data from client.');
+      console.log('Sending WebSocket handshake response.');
+      socket.write(response);
 
-      const version = new Uint8Array(vlessBuffer.slice(0, 1));
-      const uuid = new Uint8Array(vlessBuffer.slice(1, 17));
+      socket.on("data", (vlessBuffer) => {
+        console.log('Received data from client.');
 
-      // 校验UUID是否相同
-      if (!Buffer.compare(uuid, Buffer.from(UUID.replace(/-/g, ""), 'hex')) === 0) {
-        console.error("uuid error")
-        return
-      }
+        const version = new Uint8Array(vlessBuffer.slice(0, 1));
+        const uuid = vlessBuffer.slice(1, 17);
 
-      const optLength = new Uint8Array(vlessBuffer.slice(17, 18))[0];
-      const command = new Uint8Array(vlessBuffer.slice(18 + optLength, 18 + optLength + 1))[0];
-      const isUDP = command === 2;
-      if (command != 1) {
-        return
-      }
+        // 校验UUID是否相同
+        if (!Buffer.from(UUID.replace(/-/g, ""), 'hex').equals(uuid)) {
+          console.error("UUID mismatch. Received:", uuid.toString('hex'), "Expected:", UUID.replace(/-/g, ""));
+          return
+        }
 
-      const portIndex = 18 + optLength + 1;
-      const portRemote = vlessBuffer.slice(portIndex, portIndex + 2).readUInt16BE(0);
+        const optLength = new Uint8Array(vlessBuffer.slice(17, 18))[0];
+        const command = new Uint8Array(vlessBuffer.slice(18 + optLength, 18 + optLength + 1))[0];
+        const isUDP = command === 2;
+        if (command != 1) {
+          return
+        }
 
-      let addressIndex = portIndex + 2;
-      const addressBuffer = new Uint8Array(vlessBuffer.slice(addressIndex, addressIndex + 1));
+        const portIndex = 18 + optLength + 1;
+        const portRemote = vlessBuffer.slice(portIndex, portIndex + 2).readUInt16BE(0);
 
-      const addressType = addressBuffer[0];
-      let addressLength = 0;
-      let addressValueIndex = addressIndex + 1;
-      let addressValue = '';
+        let addressIndex = portIndex + 2;
+        const addressBuffer = new Uint8Array(vlessBuffer.slice(addressIndex, addressIndex + 1));
 
-      // 解析地址类型
-      switch (addressType) {
-        case 1:
-          // IPv4
-          addressLength = 4;
-          addressValue = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
-          break;
-        case 2:
-          // Domain
-          addressLength = vlessBuffer[addressValueIndex++];
-          addressValue = vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength).toString('utf-8');
-          break;
-        case 3:
-          // IPv6
-          addressLength = 16;
-          const ipv6 = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength))
-            .map((value, index) => vlessBuffer.readUInt16BE(addressIndex + index * 2).toString(16));
-          addressValue = ipv6.join(':');
-          break;
-        default:
-          return;
-      }
+        const addressType = addressBuffer[0];
+        let addressLength = 0;
+        let addressValueIndex = addressIndex + 1;
+        let addressValue = '';
 
-      console.log('conn:', addressValue, portRemote);
+        // 解析地址类型
+        switch (addressType) {
+          case 1:
+            // IPv4
+            addressLength = 4;
+            addressValue = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength)).join('.');
+            break;
+          case 2:
+            // Domain
+            addressLength = vlessBuffer[addressValueIndex++];
+            addressValue = vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength).toString('utf-8');
+            break;
+          case 3:
+            // IPv6
+            addressLength = 16;
+            const ipv6 = Array.from(vlessBuffer.slice(addressValueIndex, addressValueIndex + addressLength))
+              .map((value, index) => vlessBuffer.readUInt16BE(addressIndex + index * 2).toString(16));
+            addressValue = ipv6.join(':');
+            break;
+          default:
+            return;
+        }
 
-      // 发送一个成功的响应给客户端
-      socket.write(new Uint8Array([version[0], 0]));
+        console.log('conn:', addressValue, portRemote);
 
-      try {
-        console.log('Creating TCP connection to target website.');
+        // 发送一个成功的响应给客户端
+        socket.write(new Uint8Array([version[0], 0]));
 
-        const tcpSocket = net.createConnection({ host: addressValue, port: portRemote }, () => {
-          console.log('Connected to target website.');
+        try {
+          console.log('Creating TCP connection to target website.');
 
-          const rawClientData = vlessBuffer.slice(addressValueIndex + addressLength);
-          tcpSocket.write(rawClientData);
+          const tcpSocket = net.createConnection({ host: addressValue, port: portRemote }, () => {
+            console.log('Connected to target website.');
 
-          console.log('Piping data between client and target website.');
-          socket.pipe(tcpSocket).pipe(socket);
-        });
+            const rawClientData = vlessBuffer.slice(addressValueIndex + addressLength);
+            tcpSocket.write(rawClientData);
 
-        tcpSocket.on('end', () => {
-          console.log('Connection to target website closed.');
-        });
+            console.log('Piping data between client and target website.');
+            socket.pipe(tcpSocket).pipe(socket);
+          });
 
-        tcpSocket.on('error', (err) => {
-          console.error('Error connecting to target website:', err);
-        });
-      } catch (error) {
-        console.error("WebSocket Connection Error:", err);
-      }
-    });
+          tcpSocket.on('end', () => {
+            console.log('Connection to target website closed.');
+          });
+
+          tcpSocket.on('error', (err) => {
+            console.error('Error connecting to target website:', err);
+          });
+        } catch (error) {
+          console.error("WebSocket Connection Error:", err);
+        }
+      });
+      return;
+    }
+
+
+
+
   })
+
 
   server.on('connect', (request, socket, head) => {
     console.log('Received CONNECT request:', request.url);
@@ -597,7 +600,6 @@ function init() {
   //     console.log(data)
   //     socket.write(Buffer.from([0x05, 0x00]))
   //   })
-
 
   //   // socket.on('data', (data) => {
   //   //   try {
@@ -678,24 +680,22 @@ function init() {
   //   // });
   // });
 
-  // fastify.addHook('onRequest', async (request, reply) => {
-  //   console.log("========================")
+  fastify.addHook('onRequest', async (request, reply) => {
+    if (request.headers['proxy-connection']) {
+      console.log('Received HTTP request:', request.method, request.url);
 
-  //   if (request.headers['proxy-connection']) {
-  //     console.log('Received HTTP request:', request.method, request.url);
+      const response = await fetch(request.url, {
+        method: request.method,
+        headers: request.headers,
+      });
 
-  //     const response = await fetch(request.url, {
-  //       method: request.method,
-  //       headers: request.headers,
-  //     });
+      console.log('Received HTTP response:', response.status, response.statusText);
 
-  //     console.log('Received HTTP response:', response.status, response.statusText);
+      return reply.send(response.body);
 
-  //     return reply.send(response.body);
-
-  //     // response.body.pipe(reply.raw);
-  //   }
-  // });
+      // response.body.pipe(reply.raw);
+    }
+  });
 
 
   fastify.all("/", async (request, reply) => {
@@ -757,12 +757,16 @@ function init() {
   // 1 字节     16 字节      1 字节       M 字节       1 字节    2 字节    1 字节    S 字节   X 字节
   // 协议版本    等价 UUID    附加信息长度 M    附加信息ProtoBuf    指令     端口     地址类型    地址    请求数据
   function handleMessage(vlessBuffer, ws) {
+    // console.log(Buffer.from(vlessBuffer).toString())
+    console.log(vlessBuffer)
+
     const version = new Uint8Array(vlessBuffer.slice(0, 1));
-    const uuid = new Uint8Array(vlessBuffer.slice(1, 17));
+    const uuid = vlessBuffer.slice(1, 17);
 
     // 校验UUID是否相同
-    if (!Buffer.compare(uuid, Buffer.from(UUID.replace(/-/g, ""), 'hex')) === 0) {
-      return
+    if (!Buffer.from(UUID.replace(/-/g, ""), 'hex').equals(uuid)) {
+      console.error("UUID mismatch. Received:", uuid.toString('hex'), "Expected:", UUID.replace(/-/g, ""));
+      return;
     }
 
     const optLength = new Uint8Array(vlessBuffer.slice(17, 18))[0];
@@ -851,7 +855,12 @@ function init() {
   fastify.register(async function (fastify) {
     fastify.get(`/${WS_PATH}`, { websocket: true }, (connection, req) => {
       const ws = connection.socket;
+
+      console.log('WebSocket connection established.');
+
       ws.on("message", (msg) => {
+        console.log('Received message:', Buffer.from(msg).toString());
+
         handleMessage(msg, ws);
       });
 
@@ -874,7 +883,7 @@ function init() {
       return reply.code(403).send({ message: 'Forbidden' });
     }
 
-    const ENABLE_HTTP_UPGRADE = request.query.type === 'upgradle' 
+    const ENABLE_HTTP_UPGRADE = request.query.type === 'upgradle';
 
     const NODE_NAME = require("os").hostname();
 
