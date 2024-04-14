@@ -13,6 +13,8 @@ const port = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || 'lalifeier-vl';
 const HTTP_UPGRADE_PATH = process.env.HTTP_UPGRADE_PATH || 'lalifeier-http-upgrade-vl';
 
+const ENABLE_HTTP_UPGRADE = process.env.ENABLE_HTTP_UPGRADE || true;
+
 const NEZHA_SERVER = process.env.NEZHA_SERVER;
 const NEZHA_PORT = process.env.NEZHA_PORT;
 const NEZHA_KEY = process.env.NEZHA_KEY;
@@ -437,7 +439,7 @@ function init() {
     const url = require('url');
     const pathname = url.parse(request.url).pathname;
 
-    if (pathname !== HTTP_UPGRADE_PATH) {
+    if (pathname !== `/${HTTP_UPGRADE_PATH}`) {
       console.log('Invalid pathname. Closing connection.');
       socket.end();
       return;
@@ -907,9 +909,12 @@ function init() {
     let data = [];
     for (const HOST of DOMAIN) {
       for (const CFIP of CDN_DOMAIN) {
-        // const vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}&path=%2F${WS_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
-
-        const vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=httpupgrade&host=${HOST}&path=%2F${HTTP_UPGRADE_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
+        let vless = ''
+        if (ENABLE_HTTP_UPGRADE) {
+          vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=httpupgrade&host=${HOST}&path=%2F${HTTP_UPGRADE_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
+        } else {
+          vless = `vless://${UUID}@${CFIP}:443?encryption=none&security=tls&sni=${HOST}&type=ws&host=${HOST}&path=%2F${WS_PATH}#${getDomainPrefix(HOST)}-${CFIP}`;
+        }
 
         data.push(`${vless}`);
       }
