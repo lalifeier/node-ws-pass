@@ -13,8 +13,6 @@ const port = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || 'lalifeier-vl';
 const HTTP_UPGRADE_PATH = process.env.HTTP_UPGRADE_PATH || 'lalifeier-http-upgrade-vl';
 
-const ENABLE_HTTP_UPGRADE = process.env.ENABLE_HTTP_UPGRADE;
-
 const NEZHA_SERVER = process.env.NEZHA_SERVER;
 const NEZHA_PORT = process.env.NEZHA_PORT;
 const NEZHA_KEY = process.env.NEZHA_KEY;
@@ -876,6 +874,7 @@ function init() {
       return reply.code(403).send({ message: 'Forbidden' });
     }
 
+    const ENABLE_HTTP_UPGRADE = request.query.type === 'upgradle' 
 
     const NODE_NAME = require("os").hostname();
 
