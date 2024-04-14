@@ -13,7 +13,7 @@ const port = process.env.PORT || 3000;
 const WS_PATH = process.env.WS_PATH || 'lalifeier-vl';
 const HTTP_UPGRADE_PATH = process.env.HTTP_UPGRADE_PATH || 'lalifeier-http-upgrade-vl';
 
-const ENABLE_HTTP_UPGRADE = process.env.ENABLE_HTTP_UPGRADE || true;
+const ENABLE_HTTP_UPGRADE = process.env.ENABLE_HTTP_UPGRADE;
 
 const NEZHA_SERVER = process.env.NEZHA_SERVER;
 const NEZHA_PORT = process.env.NEZHA_PORT;
