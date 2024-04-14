@@ -437,7 +437,7 @@ function init() {
     const url = require('url');
     const pathname = url.parse(request.url).pathname;
 
-    if (pathname !== '/vless') {
+    if (pathname !== HTTP_UPGRADE_PATH) {
       console.log('Invalid pathname. Closing connection.');
       socket.end();
       return;
